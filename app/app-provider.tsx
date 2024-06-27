@@ -2,8 +2,12 @@
 
 import { createContext, useContext } from "react";
 
-interface User {
-  theme: Theme;
+import type { FirebaseApp } from "firebase/app";
+import type { Auth as FirebaseAuth } from "firebase/auth";
+
+export interface User {
+  userId: string;
+  email: string;
   initials: string;
   displayName: string;
 }
@@ -11,13 +15,14 @@ interface User {
 interface Theme {
   accentBgColor: string;
   accentTextColor: string;
-  accentFocusBorderColor: string
+  accentFocusBorderColor: string;
 }
 
-interface Thread {
+export interface Thread {
+  id: string
   title?: string;
-  createdAt: Date;
-  lastUpdated?: Date;
+  createdAt: number;
+  lastUpdated?: number;
   messages: Array<Message & { consecutive?: Omit<Message, "from">[] }>;
 }
 
@@ -27,7 +32,7 @@ interface Message {
 }
 
 export interface AppContextType {
-  activeUser: { userId: string; theme: Theme };
+  activeUser: User | null;
   threads: Record<string, Thread>;
   userList: Record<string, User>;
 }
@@ -35,11 +40,14 @@ export interface AppContextType {
 export type AppDispatchContext =
   | { type: "ADD_THREAD" }
   | { type: "ADD_MESSAGE_TO_THREAD"; threadId: string; message: string }
-  | { type: "CHANGE_USER"; userId: string }
-  | { type: "SET_THREAD_TITLE"; threadId: string; title: string };
+  | { type: "SET_THREAD_TITLE"; threadId: string; title: string }
+  | { type: "LOG_OUT" }
+  | { type: "LOG_IN"; user: Omit<User, "initials"> }
+  | { type: "SET_THREADS"; threads: Record<string, Thread> };
 
 export const AppContext = createContext<AppContextType>(null as never);
 export const AppDispatchContext = createContext<React.Dispatch<AppDispatchContext>>(null as never);
+export const FirebaseContext = createContext<{ app: FirebaseApp; auth: FirebaseAuth }>(null as never);
 
 export function useAppDispatch() {
   return useContext(AppDispatchContext);
@@ -47,6 +55,10 @@ export function useAppDispatch() {
 
 export function useAppContext() {
   return useContext(AppContext);
+}
+
+export function useFirebase() {
+  return useContext(FirebaseContext);
 }
 
 export function useThreadMessages(threadId: string) {
