@@ -119,6 +119,7 @@ function Form(props: { action: "LOG_IN" | "SIGN_UP" }) {
       setState("DONE");
       dispatch({
         type: "LOG_IN",
+        isNew: props.action === "SIGN_UP",
         user: { userId: credentials.user.uid, displayName: displayName ?? "", email },
       });
     } catch (error) {

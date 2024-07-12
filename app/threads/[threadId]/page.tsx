@@ -76,7 +76,7 @@ export default function ChatPage({ params }: { params: { threadId: string } }) {
           />
         )}
       </header>
-      <section className="flex w-full flex-1 flex-col items-center justify-end gap-2 overflow-y-auto py-2">
+      <section className="flex w-full flex-1 flex-col items-center justify-end gap-2 overflow-y-auto p-2">
         {thread.messages.map((msg, idx) => {
           // Unknown User, don't render message
 

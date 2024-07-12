@@ -19,7 +19,7 @@ interface Theme {
 }
 
 export interface Thread {
-  id: string
+  id: string;
   title?: string;
   createdAt: number;
   lastUpdated?: number;
@@ -38,12 +38,13 @@ export interface AppContextType {
 }
 
 export type AppDispatchContext =
-  | { type: "ADD_THREAD" }
+  | { type: "ADD_THREAD"; threadId: string }
   | { type: "ADD_MESSAGE_TO_THREAD"; threadId: string; message: string }
   | { type: "SET_THREAD_TITLE"; threadId: string; title: string }
   | { type: "LOG_OUT" }
-  | { type: "LOG_IN"; user: Omit<User, "initials"> }
-  | { type: "SET_THREADS"; threads: Record<string, Thread> };
+  | { type: "LOG_IN"; isNew: boolean; user: Omit<User, "initials"> }
+  | { type: "SET_THREADS"; threads: Record<string, Thread> }
+  | { type: "ADD_USERS"; users: Record<string, User> };
 
 export const AppContext = createContext<AppContextType>(null as never);
 export const AppDispatchContext = createContext<React.Dispatch<AppDispatchContext>>(null as never);

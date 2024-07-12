@@ -36,8 +36,8 @@ export default function ThreadsLayout({ children }: Readonly<{ children: React.R
           <button
             type="button"
             title="Create a New Thread"
-            onClick={() => dispatch({ type: "ADD_THREAD" })}
             className="grid aspect-square place-items-center rounded-md bg-blue-500 p-1.5 text-white"
+            onClick={() => dispatch({ type: "ADD_THREAD", threadId: Math.random().toString(36).slice(2) })}
           >
             <PlusIcon />
           </button>
@@ -76,7 +76,7 @@ export default function ThreadsLayout({ children }: Readonly<{ children: React.R
             );
           })}
         </ul>
-        <div className="flex items-center justify-between gap-x-1 p-2">
+        <div className="flex flex-wrap items-center justify-between gap-x-1 p-2">
           <div className="flex flex-col items-start justify-center gap-1">
             <span className="text-sm font-medium tracking-wide text-gray-800">{context.activeUser.displayName}</span>
             <span className="text-xs text-gray-400">{context.activeUser.email}</span>
@@ -91,7 +91,7 @@ export default function ThreadsLayout({ children }: Readonly<{ children: React.R
           </button>
         </div>
       </aside>
-      <main>{children}</main>
+      <main className="min-h-0 h-full">{children}</main>
     </Fragment>
   );
 }
