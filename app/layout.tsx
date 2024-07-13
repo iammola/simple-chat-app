@@ -5,7 +5,7 @@ import { getAuth } from "firebase/auth";
 import { Inter } from "next/font/google";
 import { initializeApp } from "firebase/app";
 import { useEffect, useReducer, useState } from "react";
-import { collection, doc, getDocs, getFirestore, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, getFirestore, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 
 import { AppContext, AppDispatchContext, FirebaseContext } from "@/app/app-provider";
 
@@ -31,8 +31,12 @@ const firebaseAuth = getAuth(firebaseApp);
 const threadsCollection = collection(firebaseStore, "threads");
 const usersCollection = collection(firebaseStore, "users");
 
+const snapshotToType = <T extends unknown>(args: Awaited<ReturnType<typeof getDocs>>) =>
+  Object.fromEntries(args.docs.map((doc) => [doc.id, doc.data() as T]));
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [mounted, setMounted] = useState(false);
+  const [initialDataLoad, setInitialDataLoad] = useState(false);
 
   const [context, dispatch] = useReducer(
     (state: AppContextType, action: AppDispatchContext) => {
@@ -60,7 +64,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           threads: { ...state.threads, [action.threadId]: newThread },
         };
       } else if (action.type === "ADD_MESSAGE_TO_THREAD") {
-        if (state.activeUser == null || action.message.length < 0) return state;
+        if (state.activeUser == null || action.message.length < 1) return state;
 
         const thread = state.threads[action.threadId];
         let messages = [...thread.messages];
@@ -76,7 +80,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         updateSession(state.activeUser);
 
         const newThread: Thread = { ...thread, messages: messages, lastUpdated: Date.now() };
-        updateDoc(doc(threadsCollection, action.threadId), newThread);
+        updateDoc(doc(threadsCollection, action.threadId), newThread as never);
 
         return { ...state, threads: { ...state.threads, [action.threadId]: newThread } };
       } else if (action.type === "SET_THREAD_TITLE") {
@@ -88,7 +92,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         updateSession(state.activeUser);
 
         const newThread: Thread = { ...thread, title: action.title, lastUpdated: Date.now() };
-        updateDoc(doc(threadsCollection, action.threadId), newThread);
+        updateDoc(doc(threadsCollection, action.threadId), newThread as never);
 
         return { ...state, threads: { ...state.threads, [action.threadId]: newThread } };
       } else if (action.type === "LOG_IN") {
@@ -142,9 +146,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   useEffect(() => {
     if (context.activeUser == null) return;
 
-    const snapshotToType = <T extends unknown>(args: Awaited<ReturnType<typeof getDocs>>) =>
-      Object.fromEntries(args.docs.map((doc) => [doc.id, doc.data() as T]));
-
     const threadsUnsubscribe = onSnapshot(threadsCollection, (snapshot) => {
       if (snapshot.metadata.hasPendingWrites) return;
       dispatch({ type: "SET_THREADS", threads: snapshotToType<Thread>(snapshot) });
@@ -163,6 +164,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (context.activeUser == null || initialDataLoad) return;
+
+    (async () => {
+      const [threadsSnapshot, usersSnapshot] = await Promise.all([
+        getDocs(threadsCollection),
+        getDocs(usersCollection),
+      ]);
+
+      dispatch({ type: "SET_THREADS", threads: snapshotToType<Thread>(threadsSnapshot) });
+      dispatch({ type: "ADD_USERS", users: snapshotToType<User>(usersSnapshot) });
+    })();
+
+    setInitialDataLoad(true);
+  }, [context.activeUser, initialDataLoad]);
 
   return (
     <html lang="en">

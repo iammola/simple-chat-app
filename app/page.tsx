@@ -7,6 +7,16 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfi
 
 import { useAppContext, useAppDispatch, useFirebase } from "@/app/app-provider";
 
+const userColors = [
+  "bg-orange-500",
+  "bg-red-500",
+  "bg-green-500",
+  "bg-amber-500",
+  "bg-teal-500",
+  "bg-pink-500",
+  "bg-sky-500",
+];
+
 export default function Home() {
   const context = useAppContext();
 
@@ -120,7 +130,12 @@ function Form(props: { action: "LOG_IN" | "SIGN_UP" }) {
       dispatch({
         type: "LOG_IN",
         isNew: props.action === "SIGN_UP",
-        user: { userId: credentials.user.uid, displayName: displayName ?? "", email },
+        user: {
+          userId: credentials.user.uid,
+          displayName: displayName ?? "",
+          email,
+          color: userColors[Math.floor(Math.random() * userColors.length)],
+        },
       });
     } catch (error) {
       console.error(error);

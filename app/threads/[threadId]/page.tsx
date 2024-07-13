@@ -1,32 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { PaperPlaneIcon } from "@radix-ui/react-icons";
-import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { useAppContext, useAppDispatch, useThreadMessages } from "@/app/app-provider";
-
-interface Theme {
-  color: string;
-  userBadgePosition: string;
-  messageContentPosition: string;
-}
-
-const ChatBubble = ({ theme, message }: { theme: Theme; message: string }) => {
-  return (
-    <div className={`flex items-center ${theme.messageContentPosition}`}>
-      <p className={`min-w-0 text-balance break-words rounded-xl p-2 text-sm ${theme.color}`}>{message}</p>
-    </div>
-  );
-};
-
-const ChatWrapper = ({ children }: { children: React.ReactNode }) => {
-  return (
-    <div className="grid w-full grid-cols-[repeat(20,minmax(0,1fr))] grid-rows-1 [&>*]:row-start-1 [&>*]:row-end-2">
-      {children}
-    </div>
-  );
-};
 
 export default function ChatPage({ params }: { params: { threadId: string } }) {
   const [mounted, setMounted] = useState(false);
@@ -37,15 +15,6 @@ export default function ChatPage({ params }: { params: { threadId: string } }) {
   const thread = useThreadMessages(params.threadId);
 
   const [messageContent, setMessageContent] = useState("");
-  const addMessage = useCallback(
-    (ev: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
-      ev.preventDefault();
-
-      setMessageContent("");
-      dispatch({ type: "ADD_MESSAGE_TO_THREAD", threadId: params.threadId, message: messageContent });
-    },
-    [messageContent, dispatch, params.threadId],
-  );
 
   useEffect(() => {
     setMounted(true);
@@ -76,46 +45,54 @@ export default function ChatPage({ params }: { params: { threadId: string } }) {
           />
         )}
       </header>
-      <section className="flex w-full flex-1 flex-col items-center justify-end gap-2 overflow-y-auto p-2">
+      <section className="w-full flex-1 space-y-4 overflow-y-auto p-2">
         {thread.messages.map((msg, idx) => {
           // Unknown User, don't render message
 
           if (!(msg.from in context.userList)) return;
 
-          // Active user side
-          const theme = {
-            color: "bg-blue-500 text-white",
-            userBadgePosition: "col-start-[20] col-end-[21]",
-            messageContentPosition: "col-start-[4] col-end-[20] justify-end",
-          };
-
-          // Recipient side
-          if (msg.from !== context.activeUser?.userId) {
-            theme.color = "bg-orange-500 text-white";
-            theme.userBadgePosition = "col-start-[1] col-end-[2]";
-            theme.messageContentPosition = "col-start-[2] col-end-[18] justify-start";
-          }
+          const theme =
+            msg.from === context.activeUser?.userId
+              ? // Active user side
+                { side: "items-end ml-auto", color: "bg-slate-500" }
+              : // Recipient side
+                { side: "items-start", color: context.userList[msg.from].color };
 
           return (
-            <Fragment key={idx}>
-              <ChatWrapper>
-                <div className={`flex items-center justify-center ${theme.userBadgePosition}`}>
-                  <div className={`select-none rounded-full p-2 text-xs uppercase tracking-wide ${theme.color}`}>
-                    {context.userList[msg.from].initials}
-                  </div>
-                </div>
-                <ChatBubble message={msg.message} theme={theme} />
-              </ChatWrapper>
+            <div
+              key={idx}
+              className={`flex w-full max-w-[calc(100%-10rem)] flex-col justify-center gap-0.5 ${theme.side}`}
+            >
+              <p title={context.userList[msg.from]?.email} className="text-xs text-gray-400">
+                {context.userList[msg.from]?.displayName ?? "Unknown"}
+              </p>
+              <p
+                className={`min-w-0 select-none text-balance break-words rounded-xl px-2 py-1 text-sm text-white ${theme.color}`}
+              >
+                {msg.message}
+              </p>
               {msg.consecutive?.map(({ message }, idx) => (
-                <ChatWrapper key={idx}>
-                  <ChatBubble message={message} theme={theme} />
-                </ChatWrapper>
+                <p
+                  key={idx}
+                  className={`min-w-0 select-none text-balance break-words rounded-xl px-2 py-1 text-sm text-white ${theme.color}`}
+                >
+                  {message}
+                </p>
               ))}
-            </Fragment>
+            </div>
           );
         })}
       </section>
-      <form className="flex w-full items-center justify-start gap-2 p-2" onSubmit={addMessage}>
+      <form
+        className="flex w-full items-center justify-start gap-2 p-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+
+          if (messageContent.trim().length < 1) return;
+          setMessageContent("");
+          dispatch({ type: "ADD_MESSAGE_TO_THREAD", threadId: params.threadId, message: messageContent.trim() });
+        }}
+      >
         <textarea
           required
           name="messageContent"
@@ -124,13 +101,14 @@ export default function ChatPage({ params }: { params: { threadId: string } }) {
           onChange={(e) => setMessageContent(e.target.value)}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
-            addMessage(e); // trigger event
+            e.preventDefault();
+            (e.target as HTMLTextAreaElement).form?.requestSubmit();
           }}
           className="max-h-[7.5rem] min-h-[3rem] flex-1 resize-y rounded-lg border border-gray-400 px-2 py-3 text-sm outline-none focus:border-blue-400"
         />
         <button
           type="submit"
-          disabled={messageContent.length < 1}
+          disabled={messageContent.trim().length < 1}
           className="flex items-center justify-center gap-2 rounded-md bg-blue-500 px-3 py-1.5 font-medium text-white disabled:brightness-75"
         >
           Send <PaperPlaneIcon />

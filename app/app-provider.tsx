@@ -10,6 +10,7 @@ export interface User {
   email: string;
   initials: string;
   displayName: string;
+  color: string;
 }
 
 interface Theme {

@@ -64,7 +64,7 @@ export default function ThreadsLayout({ children }: Readonly<{ children: React.R
                   <p className="truncate text-xs text-gray-400">
                     {lastMessage.from == null
                       ? "No messages"
-                      : `${context.userList[lastMessage.from].initials}: ${lastMessage.message}`}
+                      : `${context.userList[lastMessage.from]?.initials ?? "Unknown"}: ${lastMessage.message}`}
                   </p>
                   {thread.lastUpdated != null && (
                     <p className="col-start-2 col-end-3 shrink-0 text-xs text-gray-400">
@@ -91,7 +91,7 @@ export default function ThreadsLayout({ children }: Readonly<{ children: React.R
           </button>
         </div>
       </aside>
-      <main className="min-h-0 h-full">{children}</main>
+      <main className="h-full min-h-0">{children}</main>
     </Fragment>
   );
 }
