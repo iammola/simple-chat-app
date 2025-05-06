@@ -1,11 +1,12 @@
 "use client";
 import "./globals.css";
 
+import { faker } from "@faker-js/faker";
 import { getAuth } from "firebase/auth";
 import { Inter } from "next/font/google";
 import { initializeApp } from "firebase/app";
-import { useEffect, useReducer, useState } from "react";
-import { collection, doc, getDoc, getDocs, getFirestore, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { useEffect, useReducer } from "react";
+import { collection, doc, getDocs, getFirestore, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 
 import { AppContext, AppDispatchContext, FirebaseContext } from "@/app/app-provider";
 
@@ -14,6 +15,7 @@ import type { AppContextType, Thread, User } from "@/app/app-provider";
 const inter = Inter({ subsets: ["latin"] });
 
 const ACTIVE_USER_KEY = "chat/active-user";
+const ANONYMOUS_USER_ID = "chat/anonymous-active-user";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_API_KEY,
@@ -35,23 +37,25 @@ const snapshotToType = <T extends unknown>(args: Awaited<ReturnType<typeof getDo
   Object.fromEntries(args.docs.map((doc) => [doc.id, doc.data() as T]));
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [mounted, setMounted] = useState(false);
-  const [initialDataLoad, setInitialDataLoad] = useState(false);
-
   const [context, dispatch] = useReducer(
     (state: AppContextType, action: AppDispatchContext) => {
-      const updateSession = (user: NonNullable<AppContextType["activeUser"]>) => {
-        localStorage.setItem(ACTIVE_USER_KEY, JSON.stringify({ timestamp: Date.now(), user }));
+      const updateSession = (user: NonNullable<AppContextType["activeUser"]> | null) => {
+        user != null && localStorage.setItem(ACTIVE_USER_KEY, JSON.stringify({ timestamp: Date.now(), user }));
       };
 
       const clearSession = () => localStorage.removeItem(ACTIVE_USER_KEY);
 
-      if (action.type === "SET_THREADS") {
+      const implicitActiveUser = state.activeUser?.userId ?? localStorage.getItem(ANONYMOUS_USER_ID);
+      if (implicitActiveUser == null) return state;
+
+      if (action.type === "SET_STATE") {
+        return { ...state, state: action.state };
+      } else if (action.type === "SET_THREADS") {
         return { ...state, threads: action.threads };
       } else if (action.type === "ADD_USERS") {
         return { ...state, userList: { ...state.userList, ...action.users } };
       } else if (action.type === "ADD_THREAD") {
-        if (state.activeUser == null || state.threads[action.threadId] != null) return state;
+        if (state.threads[action.threadId] != null) return state;
 
         updateSession(state.activeUser);
 
@@ -64,22 +68,23 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           threads: { ...state.threads, [action.threadId]: newThread },
         };
       } else if (action.type === "ADD_MESSAGE_TO_THREAD") {
-        if (state.activeUser == null || action.message.length < 1) return state;
+        const message = action.message.trim();
+        if (message.length < 1) return state;
 
         const thread = state.threads[action.threadId];
         let messages = [...thread.messages];
 
-        if (messages.at(-1)?.from === state.activeUser.userId) {
+        if (messages.at(-1)?.from === implicitActiveUser) {
           const messagesCount = messages.length - 1;
 
           messages = messages.map((_, idx) =>
-            idx === messagesCount ? { ..._, consecutive: [...(_.consecutive ?? []), { message: action.message }] } : _,
+            idx === messagesCount ? { ..._, consecutive: [...(_.consecutive ?? []), { message }] } : _,
           );
-        } else messages = [...messages, { from: state.activeUser.userId, message: action.message }];
+        } else messages = [...messages, { from: implicitActiveUser, message }];
 
         updateSession(state.activeUser);
 
-        const newThread: Thread = { ...thread, messages: messages, lastUpdated: Date.now() };
+        const newThread: Thread = { ...thread, messages, lastUpdated: Date.now() };
         updateDoc(doc(threadsCollection, action.threadId), newThread as never);
 
         return { ...state, threads: { ...state.threads, [action.threadId]: newThread } };
@@ -120,6 +125,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       return state;
     },
     {
+      state: "IDLE",
       activeUser: null,
       userList: {},
       threads: {},
@@ -127,12 +133,25 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     (initial) => {
       try {
         const storedUser = localStorage.getItem(ACTIVE_USER_KEY);
-        if (storedUser == null) return initial;
 
-        const parsed = JSON.parse(storedUser) as { timestamp: number; user: NonNullable<AppContextType["activeUser"]> };
+        if (storedUser != null) {
+          const parsed = JSON.parse(storedUser) as {
+            timestamp: number;
+            user: NonNullable<AppContextType["activeUser"]>;
+          };
 
-        if (parsed.timestamp + 1 * 24 * 60 * 60 * 1e3 < Date.now()) return initial;
-        return { ...initial, activeUser: parsed.user, userList: { [parsed.user.userId]: parsed.user } };
+          if (parsed.timestamp + 1 * 24 * 60 * 60 * 1e3 < Date.now()) return initial;
+          return {
+            ...initial,
+            activeUser: parsed.user,
+            userList: { [parsed.user.userId]: parsed.user },
+          };
+        }
+
+        // Generate implicit NanoID for anonymous user
+        localStorage.setItem(ANONYMOUS_USER_ID, faker.string.nanoid());
+
+        return initial;
       } catch (error) {
         return initial;
       }
@@ -140,12 +159,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   );
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (context.activeUser == null) return;
-
     const threadsUnsubscribe = onSnapshot(threadsCollection, (snapshot) => {
       if (snapshot.metadata.hasPendingWrites) return;
       dispatch({ type: "SET_THREADS", threads: snapshotToType<Thread>(snapshot) });
@@ -162,24 +175,25 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   }, [context.activeUser]);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (context.activeUser == null || initialDataLoad) return;
+    if (context.state !== "IDLE") return;
 
     (async () => {
-      const [threadsSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(threadsCollection),
-        getDocs(usersCollection),
-      ]);
+      dispatch({ type: "SET_STATE", state: "LOADING" });
 
-      dispatch({ type: "SET_THREADS", threads: snapshotToType<Thread>(threadsSnapshot) });
-      dispatch({ type: "ADD_USERS", users: snapshotToType<User>(usersSnapshot) });
+      try {
+        const [threadsSnapshot, usersSnapshot] = await Promise.all([
+          getDocs(threadsCollection),
+          getDocs(usersCollection),
+        ]);
+
+        dispatch({ type: "SET_THREADS", threads: snapshotToType<Thread>(threadsSnapshot) });
+        dispatch({ type: "ADD_USERS", users: snapshotToType<User>(usersSnapshot) });
+        dispatch({ type: "SET_STATE", state: "READY" });
+      } catch (error) {
+        dispatch({ type: "SET_STATE", state: "ERROR" });
+      }
     })();
-
-    setInitialDataLoad(true);
-  }, [context.activeUser, initialDataLoad]);
+  }, [context.state]);
 
   return (
     <html lang="en">
@@ -187,7 +201,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="grid h-full w-full grid-cols-[25%_minmax(0,_1fr)] divide-x">
           <FirebaseContext.Provider value={{ app: firebaseApp, auth: firebaseAuth }}>
             <AppContext.Provider value={context}>
-              <AppDispatchContext.Provider value={dispatch}>{mounted ? children : null}</AppDispatchContext.Provider>
+              <AppDispatchContext.Provider value={dispatch}>
+                {context.state === "IDLE" ? null : children}
+              </AppDispatchContext.Provider>
             </AppContext.Provider>
           </FirebaseContext.Provider>
         </div>

@@ -10,7 +10,6 @@ export interface User {
   email: string;
   initials: string;
   displayName: string;
-  color: string;
 }
 
 interface Theme {
@@ -33,12 +32,14 @@ interface Message {
 }
 
 export interface AppContextType {
+  state: "IDLE" | "LOADING" | "READY" | "ERROR";
   activeUser: User | null;
   threads: Record<string, Thread>;
   userList: Record<string, User>;
 }
 
 export type AppDispatchContext =
+  | { type: "SET_STATE"; state: AppContextType["state"] }
   | { type: "ADD_THREAD"; threadId: string }
   | { type: "ADD_MESSAGE_TO_THREAD"; threadId: string; message: string }
   | { type: "SET_THREAD_TITLE"; threadId: string; title: string }
